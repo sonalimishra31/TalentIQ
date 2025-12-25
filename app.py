@@ -4,7 +4,7 @@ import hashlib
 import pandas as pd
 import pdfplumber
 import docx
-
+import streamlit.components.v1 as components
 from resume_analyzer import (
     best_job_for_student,
     job_description_match,
@@ -237,3 +237,21 @@ else:
 # ---------------- FOOTER ----------------
 st.markdown("---")
 st.caption("© 2025 TalentIQ AI | Designed for Students 🎓 & Recruiters 👔")
+
+
+def add_google_analytics():
+    GA_ID = "G-DF30V0Q0CT"  # 🔴 REPLACE with your real ID
+
+    components.html(
+        f"""
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', '{GA_ID}');
+        </script>
+        """,
+        height=0,
+    )
