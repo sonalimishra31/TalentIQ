@@ -1,6 +1,11 @@
 import re
 import pandas as pd
+
+import nltk
 from nltk.corpus import stopwords
+
+# Download stopwords at runtime (Streamlit Cloud fix)
+nltk.download("stopwords", quiet=True)
 
 # -------------------------
 # Load stopwords
@@ -131,3 +136,4 @@ def best_job_for_student(resume_text):
 
     best_role = max(scores, key=scores.get)
     return best_role, scores
+
