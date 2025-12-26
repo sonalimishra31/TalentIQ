@@ -4,21 +4,26 @@ import hashlib
 import pandas as pd
 import pdfplumber
 import docx
+from io import StringIO
 import streamlit.components.v1 as components
+
 from resume_analyzer import (
-    best_job_for_student,
-    job_description_match,
-    ats_score
+    ats_score,
+    skill_match_table,
+    missing_skills,
+    strengths,
+    resume_improvement_tips,
+    best_job_for_student
 )
 
-# ---------------- PAGE CONFIG ----------------
+# ================= PAGE CONFIG =================
 st.set_page_config(
     page_title="TalentIQ AI – Smart Career & Hiring Platform",
     page_icon="🎓",
     layout="wide"
 )
 
-# ---------------- CUSTOM CSS ----------------
+# ================= CUSTOM CSS =================
 st.markdown("""
 <style>
 .main { background-color: #f8fafc; }
@@ -29,18 +34,12 @@ st.markdown("""
     box-shadow: 0px 4px 15px rgba(0,0,0,0.08);
     margin-bottom: 20px;
 }
-.big-title {
-    font-size: 38px;
-    font-weight: 700;
-}
-.subtitle {
-    font-size: 18px;
-    color: #555;
-}
+.big-title { font-size: 38px; font-weight: 700; }
+.subtitle { font-size: 18px; color: #555; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- DATABASE ----------------
+# ================= DATABASE =================
 def get_db():
     return sqlite3.connect("users.db", check_same_thread=False)
 
@@ -63,7 +62,7 @@ CREATE TABLE IF NOT EXISTS history(
 """)
 db.commit()
 
-# ---------------- AUTH ----------------
+# ================= AUTH =================
 def hash_pwd(p):
     return hashlib.sha256(p.encode()).hexdigest()
 
@@ -81,21 +80,72 @@ def signup_user(u, p):
     except:
         return False
 
-# ---------------- FILE READ ----------------
-def read_resume(file):
-    if file.name.endswith(".pdf"):
-        with pdfplumber.open(file) as pdf:
-            return "".join(p.extract_text() or "" for p in pdf.pages)
-    if file.name.endswith(".docx"):
-        d = docx.Document(file)
-        return " ".join(p.text for p in d.paragraphs)
-    return file.read().decode("utf-8", errors="ignore")
+# ================= FILE READ =================
+def extract_text(uploaded_file):
+    if uploaded_file.name.endswith(".txt"):
+        return StringIO(uploaded_file.getvalue().decode("utf-8")).read()
+    elif uploaded_file.name.endswith(".pdf"):
+        text = ""
+        with pdfplumber.open(uploaded_file) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        return text
+    elif uploaded_file.name.endswith(".docx"):
+        d = docx.Document(uploaded_file)
+        return "\n".join(p.text for p in d.paragraphs)
+    return ""
 
-# ---------------- SESSION ----------------
+# ================= JOB SUGGESTIONS =================
+def suggest_jobs(matched_skills):
+    job_map = {
+        "python": "Python Developer",
+        "machine": "Machine Learning Engineer",
+        "learning": "AI Engineer",
+        "sql": "Data Analyst",
+        "data": "Data Scientist",
+        "analysis": "Business Analyst",
+        "java": "Java Developer",
+        "html": "Web Developer",
+        "css": "Front-End Developer",
+        "javascript": "Full Stack Developer",
+        "cloud": "Cloud Engineer",
+        "aws": "AWS Engineer",
+        "azure": "Cloud Architect",
+        "cyber": "Cybersecurity Analyst",
+        "network": "Network Engineer",
+        "testing": "QA Engineer"
+    }
+
+    suggestions = set()
+    for skill in matched_skills:
+        for key, job in job_map.items():
+            if key in skill:
+                suggestions.add(job)
+    return list(suggestions)
+
+# ================= GOOGLE ANALYTICS =================
+def add_google_analytics():
+    GA_ID = "G-DF30V0Q0CT"   # replace if needed
+    components.html(
+        f"""
+        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', '{GA_ID}');
+        </script>
+        """,
+        height=0,
+    )
+
+add_google_analytics()
+
+# ================= SESSION =================
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# ---------------- LOGIN ----------------
+# ================= LOGIN / SIGNUP =================
 if not st.session_state.user:
     st.image(
         "https://images.unsplash.com/photo-1522071820081-009f0129c71c",
@@ -111,8 +161,8 @@ if not st.session_state.user:
     tab1, tab2 = st.tabs(["🔐 Login", "📝 Signup"])
 
     with tab1:
-        u = st.text_input("Username", key="login_user")
-        p = st.text_input("Password", type="password", key="login_pass")
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
         if st.button("Login"):
             if login_user(u, p):
                 st.session_state.user = u
@@ -121,19 +171,17 @@ if not st.session_state.user:
                 st.error("Invalid credentials")
 
     with tab2:
-        u2 = st.text_input("New Username", key="signup_user")
-        p2 = st.text_input("New Password", type="password", key="signup_pass")
+        u2 = st.text_input("New Username")
+        p2 = st.text_input("New Password", type="password")
         if st.button("Create Account"):
             if signup_user(u2, p2):
                 st.success("Account created successfully 🎉")
             else:
                 st.error("User already exists")
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.image(
-    "https://images.unsplash.com/photo-1521737604893-d14cc237f11d",
-    use_container_width=True
-)
+    st.stop()
+
+# ================= SIDEBAR =================
 st.sidebar.success(f"👤 {st.session_state.user}")
 
 menu = st.sidebar.radio(
@@ -141,13 +189,8 @@ menu = st.sidebar.radio(
     ["🏠 Student Dashboard", "📄 Resume & Job Analyzer", "🚪 Logout"]
 )
 
-# ---------------- STUDENT DASHBOARD ----------------
+# ================= STUDENT DASHBOARD =================
 if menu == "🏠 Student Dashboard":
-    st.image(
-        "https://images.unsplash.com/photo-1516321497487-e288fb19713f",
-        use_container_width=True
-    )
-
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.header("📊 Student Career Dashboard")
 
@@ -158,13 +201,13 @@ if menu == "🏠 Student Dashboard":
     )
 
     if df.empty:
-        st.info("Start analyzing resumes to see insights here.")
+        st.info("Analyze resumes to see insights here.")
     else:
         df["time"] = pd.to_datetime(df["time"])
-        col1, col2 = st.columns(2)
 
+        col1, col2 = st.columns(2)
         with col1:
-            st.metric("Total Resume Analyses", len(df))
+            st.metric("Total Analyses", len(df))
             st.line_chart(df.set_index("time")["jd_match"])
 
         with col2:
@@ -173,85 +216,72 @@ if menu == "🏠 Student Dashboard":
                 "Status": ["Matched", "Gap"],
                 "Value": [avg, 100 - avg]
             }).set_index("Status")
+            st.pyplot(pie_df.plot.pie(y="Value", autopct="%1.1f%%").figure)
 
-            st.pyplot(
-                pie_df.plot.pie(
-                    y="Value",
-                    autopct="%1.1f%%",
-                    legend=False
-                ).figure
-            )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------------- ANALYZER ----------------
+# ================= ANALYZER =================
 elif menu == "📄 Resume & Job Analyzer":
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.header("🤖 Resume & Job Intelligence")
 
-    file = st.file_uploader("Upload Resume (PDF / DOCX / TXT)", ["pdf", "docx", "txt"])
+    uploaded_file = st.file_uploader("Upload Resume", ["pdf", "docx", "txt"])
+    job_description = st.text_area("Paste Job Description", height=220)
 
-    if file:
-        resume_text = read_resume(file)
+    if st.button("🔍 Analyze Resume"):
+        if not uploaded_file or not job_description:
+            st.error("Upload resume and paste job description.")
+            st.stop()
+
+        resume_text = extract_text(uploaded_file)
+
+        # Best role
         best_role, role_data = best_job_for_student(resume_text)
+        st.success(f"🎯 Best Job Role: **{best_role}**")
 
-        st.success(f"🎯 Best Job Role for You: **{best_role}**")
+        # ATS
+        score = ats_score(resume_text, job_description)
+        st.metric("ATS Score", f"{score}%")
+        st.progress(score / 100)
 
-        st.subheader("💡 Talent vs Skill Gap")
-        st.write("✅ **Talents:**", role_data[best_role]["talent"])
-        st.write("❌ **Lacks:**", role_data[best_role]["lack"])
+        # Skill table
+        st.subheader("🧠 Skill Match Table")
+        st.dataframe(skill_match_table(resume_text, job_description))
 
-        jd_text = st.text_area("📌 Paste Job Description")
+        # Strengths & gaps
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("💪 Strengths")
+            matched = strengths(resume_text, job_description)
+            st.write(matched or "No strong matches")
+        with col2:
+            st.error("❌ Missing Skills")
+            missing = missing_skills(resume_text, job_description)
+            st.write(missing or "No major gaps")
 
-        if jd_text:
-            match, matched, missing, decision = job_description_match(resume_text, jd_text)
-            ats, verdict = ats_score(match, matched, missing)
+        # Job suggestions
+        st.subheader("🎯 Skill-Based Job Suggestions")
+        for job in suggest_jobs(matched):
+            st.info(job)
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("JD Match %", match)
-            col2.metric("ATS Score", ats)
-            col3.info(decision)
+        # Tips
+        st.subheader("✨ Resume Improvement Tips")
+        for tip in resume_improvement_tips(resume_text, job_description):
+            st.write("•", tip)
 
-            chart_df = pd.DataFrame({
-                "Category": ["Matched", "Missing"],
-                "Count": [len(matched), len(missing)]
-            }).set_index("Category")
-
-            st.subheader("📊 Skill Match Visualization")
-            c1, c2 = st.columns(2)
-            c1.pyplot(chart_df.plot.pie(y="Count", autopct="%1.1f%%").figure)
-            c2.bar_chart(chart_df)
-
-            db.execute(
-                "INSERT INTO history (user, role, jd_match) VALUES (?,?,?)",
-                (st.session_state.user, best_role, match)
-            )
-            db.commit()
+        db.execute(
+            "INSERT INTO history (user, role, jd_match) VALUES (?,?,?)",
+            (st.session_state.user, best_role, score)
+        )
+        db.commit()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------------- LOGOUT ----------------
+# ================= LOGOUT =================
 else:
     st.session_state.user = None
     st.rerun()
 
-# ---------------- FOOTER ----------------
+# ================= FOOTER =================
 st.markdown("---")
-st.caption("© 2025 TalentIQ AI | Designed for Students 🎓 & Recruiters 👔")
-
-
-def add_google_analytics():
-    GA_ID = "G-DF30V0Q0CT"  # 🔴 REPLACE with your real ID
-
-    components.html(
-        f"""
-        <!-- Google tag (gtag.js) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
-        <script>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){{dataLayer.push(arguments);}}
-          gtag('js', new Date());
-          gtag('config', '{GA_ID}');
-        </script>
-        """,
-        height=0,
-    )
+st.caption("© 2025 TalentIQ AI | Built for Students 🎓 & Recruiters 👔")
