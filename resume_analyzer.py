@@ -1,47 +1,112 @@
 import re
+import pandas as pd
+from nltk.corpus import stopwords
 
-JOB_ROLES = {
-    "Data Scientist": ["python", "machine learning", "statistics", "sql", "nlp"],
-    "ML Engineer": ["python", "deep learning", "tensorflow", "pytorch"],
-    "Data Analyst": ["python", "sql", "excel", "power bi"],
-    "Python Developer": ["python", "django", "flask", "api"]
-}
+# -------------------------
+# Load stopwords
+# -------------------------
+STOPWORDS = set(stopwords.words("english"))
 
-def clean_words(text):
-    return set(re.findall(r"[a-zA-Z]+", text.lower()))
+# -------------------------
+# Preprocess text
+# -------------------------
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r"[^a-zA-Z ]", " ", text)
+    words = text.split()
+    words = [w for w in words if w not in STOPWORDS and len(w) > 2]
+    return set(words)
 
-# 🔹 Best Job Role
-def best_job_for_student(resume_text):
-    results = {}
-    words = clean_words(resume_text)
+# -------------------------
+# Extract skills from text
+# -------------------------
+def extract_skills(text):
+    return preprocess_text(text)
 
-    for role, skills in JOB_ROLES.items():
-        matched = [s for s in skills if s in words]
-        score = int((len(matched) / len(skills)) * 100)
-        results[role] = {
-            "score": score,
-            "talent": matched,
-            "lack": list(set(skills) - set(matched))
-        }
+# -------------------------
+# ATS Score Calculation
+# -------------------------
+def ats_score(resume_text, jd_text):
+    if not resume_text or not jd_text:
+        return 0
 
-    best = max(results, key=lambda r: results[r]["score"])
-    return best, results
+    resume_skills = extract_skills(resume_text)
+    jd_skills = extract_skills(jd_text)
 
-# 🔹 JD vs Resume Match
-def job_description_match(resume_text, jd_text):
-    r = clean_words(resume_text)
-    j = clean_words(jd_text)
+    if len(jd_skills) == 0:
+        return 0
 
-    matched = list(r & j)
-    missing = list(j - r)
+    matched = resume_skills.intersection(jd_skills)
+    score = int((len(matched) / len(jd_skills)) * 100)
 
-    percent = int((len(matched) / len(j)) * 100) if j else 0
-    decision = "Good Match ✅" if percent >= 60 else "Not a Good Match ❌"
+    # Cap score to realistic ATS behavior
+    return min(score, 95)
 
-    return percent, matched, missing, decision
+# -------------------------
+# Skill-wise Match Table
+# -------------------------
+def skill_match_table(resume_text, jd_text):
+    resume_skills = extract_skills(resume_text)
+    jd_skills = extract_skills(jd_text)
 
-# 🔹 ATS Simulation
-def ats_score(match, matched, missing):
-    score = min(100, max(0, int(match * 0.6 + len(matched) * 4 - len(missing) * 3)))
-    verdict = "Strong" if score > 70 else "Average" if score > 45 else "Weak"
-    return score, verdict
+    data = []
+    for skill in sorted(jd_skills):
+        data.append({
+            "Skill": skill,
+            "Status": "✅ Matched" if skill in resume_skills else "❌ Missing"
+        })
+
+    return pd.DataFrame(data)
+
+# -------------------------
+# Missing Skills
+# -------------------------
+def missing_skills(resume_text, jd_text):
+    resume_skills = extract_skills(resume_text)
+    jd_skills = extract_skills(jd_text)
+
+    return sorted(list(jd_skills - resume_skills))
+
+# -------------------------
+# Strengths / Talents
+# -------------------------
+def strengths(resume_text, jd_text):
+    resume_skills = extract_skills(resume_text)
+    jd_skills = extract_skills(jd_text)
+
+    return sorted(list(resume_skills.intersection(jd_skills)))
+
+# -------------------------
+# Resume Improvement Tips
+# -------------------------
+def resume_improvement_tips(resume_text, jd_text):
+    missing = missing_skills(resume_text, jd_text)
+    tips = []
+
+    if len(missing) > 0:
+        tips.append(
+            "🔧 Add these missing skills to your resume (if applicable): "
+            + ", ".join(missing[:10])
+        )
+
+    tips.extend([
+        "📌 Use exact job description keywords to improve ATS ranking.",
+        "📄 Add measurable achievements (e.g., 'Improved accuracy by 20%').",
+        "🧠 Include tools, technologies, and certifications explicitly.",
+        "🎯 Tailor your resume summary for each job role.",
+        "📑 Avoid images, tables, and fancy formatting for ATS compatibility."
+    ])
+
+    return tips
+
+# -------------------------
+# Full Resume Analysis (Optional helper)
+# -------------------------
+def full_resume_analysis(resume_text, jd_text):
+    return {
+        "ats_score": ats_score(resume_text, jd_text),
+        "matched_skills": strengths(resume_text, jd_text),
+        "missing_skills": missing_skills(resume_text, jd_text),
+        "skill_table": skill_match_table(resume_text, jd_text),
+        "tips": resume_improvement_tips(resume_text, jd_text)
+    }
