@@ -110,3 +110,24 @@ def full_resume_analysis(resume_text, jd_text):
         "skill_table": skill_match_table(resume_text, jd_text),
         "tips": resume_improvement_tips(resume_text, jd_text)
     }
+
+def best_job_for_student(resume_text):
+    resume_text = resume_text.lower()
+
+    job_roles = {
+        "Data Scientist": ["python", "machine learning", "data", "statistics", "pandas"],
+        "AI Engineer": ["deep learning", "neural", "tensorflow", "pytorch", "ai"],
+        "Data Analyst": ["excel", "sql", "power bi", "tableau", "analysis"],
+        "Web Developer": ["html", "css", "javascript", "react", "frontend"],
+        "Backend Developer": ["django", "flask", "api", "backend"],
+        "Cloud Engineer": ["aws", "azure", "gcp", "cloud"],
+        "Cybersecurity Analyst": ["security", "network", "cyber", "penetration"],
+        "QA Engineer": ["testing", "selenium", "automation", "qa"]
+    }
+
+    scores = {}
+    for role, skills in job_roles.items():
+        scores[role] = sum(1 for skill in skills if skill in resume_text)
+
+    best_role = max(scores, key=scores.get)
+    return best_role, scores
